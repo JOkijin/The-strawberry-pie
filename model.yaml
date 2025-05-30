@@ -1,0 +1,89 @@
+# configs/model.yaml  
+# 生成对抗网络模型配置规范 v1.2 
+ 
+generator:
+  base_arch: "StyleGAN3-T"    # 基础架构类型 
+  latent_dim: 512             # 潜在空间维度 
+  mapping_network:
+    num_layers: 8             # 映射网络层数 
+    lr_mul: 0.01             # 学习率乘数 
+    normalize: true           # 层归一化 
+  
+  synthesis_network:
+    resolution: 1024         # 输出分辨率 
+    channels: [512, 512, 256, 128]  # 各阶段通道数 
+    upsample_mode: "nearest"  # 上采样方式 
+    attention_layers: [4, 8]  # 注意力层位置 
+    resblock:
+      activation: "leaky_relu" # 激活函数 
+      use_sn: true            # 使用谱归一化 
+      dropout: 0.2            # 随机丢弃率 
+  
+  input_encoder:
+    type: "ViT-B/16"          # 视觉Transformer配置 
+    pretrained: "imagenet21k" # 预训练权重 
+    freeze: false             # 是否冻结参数 
+ 
+discriminator:
+  type: "MultiScalePatchGAN"  # 判别器类型 
+  scales: 3                   # 多尺度数量 
+  channels: [64, 128, 256]    # 各尺度基础通道 
+  spectral_norm: true         # 谱归一化启用 
+  residual_blocks: 4           # 残差块数量 
+  
+  pyramid_config:
+    - scale: 1.0              # 原尺度 
+      kernel: [5,5]           # 卷积核尺寸 
+      stride: 2 
+    - scale: 0.5              # 中尺度 
+      kernel: [3,3]
+      stride: 1 
+    - scale: 0.25             # 小尺度 
+      kernel: [3,3]
+      stride: 1 
+  
+  auxiliary_head:            # 辅助检测头 
+    compliance_check: true   # 规范合规检测 
+    num_classes: 5           # 规范类型数 
+ 
+loss:
+  components:
+    - name: "adversarial"     # 对抗损失 
+      weight: 0.7            # 损失权重 
+      type: "hinge"          # 损失类型 
+    
+    - name: "perceptual"     # 感知损失 
+      weight: 0.2 
+      network: "vgg19"       # 特征网络 
+      layers: [3, 8, 15]     # 提取层 
+    
+    - name: "regularization" # 正则化项 
+      weight: 0.1 
+      type: "L1"             # 正则化类型 
+    
+    - name: "gradient_penalty" # 梯度惩罚 
+      weight: 10.0 
+      interval: 5            # 应用间隔 
+ 
+compliance_rules:            # 规范检查参数 
+  door:
+    min_width: 900           # 最小门宽(mm)
+    clear_height: 2000       # 最小净高 
+    
+  window:
+    area_ratio: 0.2          # 窗地比下限 
+    height_limit: 900        # 窗台最低高度 
+    
+  circulation:
+    main_path: 1200          # 主要动线宽度 
+    secondary_path: 900      # 次要动线宽度 
+ 
+initialization:
+  generator:
+    type: "kaiming_normal"   # 初始化方式 
+    mode: "fan_in"
+    nonlinearity: "leaky_relu"
+  
+  discriminator:
+    type: "xavier_uniform"
+    gain: 0.2 
