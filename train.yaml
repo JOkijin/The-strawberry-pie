@@ -1,0 +1,111 @@
+# configs/train.yaml 
+# 深度学习训练系统配置规范 v2.1 
+ 
+system:
+  seed: 2023 
+  deterministic: true 
+  precision: "bf16-mixed"  # 混合精度配置 
+  devices: 2               # GPU数量
+  strategy: "ddp"          # 分布式策略 
+ 
+model:
+  generator:
+    type: "StyleGAN3-T"
+    latent_dim: 512
+    mapping_layers: 8 
+    synthesis_layers: 18 
+    attention_layers: [4, 8, 12]
+    lr_mul: 0.01
+    
+  discriminator:
+    type: "MultiScalePatchGAN"
+    scales: 3
+    channels: [64, 128, 256]
+    spectral_norm: true 
+ 
+  loss:
+    adv_weight: 0.7       # 对抗损失权重
+    perceptual_weight: 0.2 # 感知损失权重
+    reg_weight: 0.1        # L1正则化权重
+    gp_weight: 10.0        # 梯度惩罚系数 
+ 
+data:
+  train:
+    root_dir: "./data/processed/train"
+    batch_size: 8          # 单卡batch size 
+    num_workers: 6 
+    shuffle: true
+    augmentations:
+      perspective_prob: 0.6 
+      rotation_range: [-15, 15]
+      material_variation: 0.3
+ 
+  val:
+    root_dir: "./data/processed/val"
+    batch_size: 4 
+    num_workers: 4 
+ 
+optimizer:
+  generator:
+    type: "AdamW"
+    lr: 0.0002 
+    betas: [0.0, 0.99]
+    weight_decay: 0.01
+ 
+  discriminator:
+    type: "AdamW" 
+    lr: 0.0002 
+    betas: [0.0, 0.99]
+    weight_decay: 0.01
+ 
+scheduler:
+  type: "CosineAnnealingLR"
+  T_max: 100000 
+  eta_min: 1e-6 
+  interval: "step"
+ 
+training:
+  max_epochs: 100 
+  checkpoint:
+    dir: "./checkpoints"
+    filename: "design-gan-{epoch}"
+    save_top_k: 3
+    monitor: "val/loss"
+    mode: "min"
+    
+  loggers:
+    - type: "tensorboard"
+      save_dir: "./logs"
+      name: "design-gan"
+      
+    - type: "wandb"
+      project: "interior-design-gan"
+      offline: false 
+ 
+  early_stop:
+    monitor: "val/loss"
+    patience: 15
+    mode: "min"
+    min_delta: 0.01 
+ 
+  callbacks:
+    gradient_clip:
+      enabled: true 
+      max_norm: 1.0 
+ 
+    lr_monitor:
+      logging_interval: "epoch"
+ 
+  # GAN特殊配置 
+  g_train_interval: 3     # 每3步训练一次生成器 
+  d_accumulate_steps: 1   # 判别器梯度累积步数
+  
+profiler:
+  enabled: true 
+  dir: "./profiles"
+  schedule:
+    skip_first: 10
+    wait: 5
+    warmup: 2 
+    active: 10 
+    repeat: 2 
